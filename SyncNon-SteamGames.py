@@ -65,6 +65,16 @@ def generate_appid(game_name, exe_path):
     legacy_id = zlib.crc32(unique_name) | 0x80000000
     return str(legacy_id)
 
+def getGridImageURLBySize(json,image_type):
+    imageSize = {'grid' : (600,900), 'home' : (920,430)}
+
+    ##Locating the image type by size, and taking the first result 
+    url = [x for x in json['data'] if x and x['width'] == imageSize[image_type][0] and x['height'] == imageSize[image_type][1]]
+    if(url):
+        return url[0]['url']
+    else:
+        return None
+
 def fetch_steamgriddb_image(game_id, image_type):
     """Fetch a single image (first available) of specified type from SteamGridDB."""
     headers = {
@@ -72,13 +82,20 @@ def fetch_steamgriddb_image(game_id, image_type):
     }
     if image_type == 'hero':
         base_url = f'https://www.steamgriddb.com/api/v2/heroes/game/{game_id}'
+    elif image_type == "home":
+        base_url = f'https://www.steamgriddb.com/api/v2/grids/game/{game_id}'
     else: base_url = f'https://www.steamgriddb.com/api/v2/{image_type}s/game/{game_id}'
     response = requests.get(base_url, headers=headers)
     logger.info(f"Fetching {image_type} for game ID: {game_id}, URL: {base_url}, Status Code: {response.status_code}")
+
+
     if response.status_code == 200:
         data = response.json()
         if data['success'] and data['data']:
+            if image_type == "home" or image_type == 'grid':
+                return getGridImageURLBySize(data, image_type)
             return data['data'][0]['url']  # Return the URL of the first image found
+        
     logger.error(f"Failed to fetch {image_type} for game ID: {game_id}")
     return None
 
@@ -97,7 +114,7 @@ def download_image(url, local_path):
 
 def save_images(appid, game_id):
     """Save grid, hero, and logo images for the game."""
-    image_types = ['grid', 'hero', 'logo']
+    image_types = ['grid', 'hero', 'logo', 'home']
     for image_type in image_types:
         url = fetch_steamgriddb_image(game_id, image_type)
         if url:
@@ -109,8 +126,8 @@ def save_images(appid, game_id):
                 image_path = os.path.join(grid_folder, f'{appid}_hero{extension}')
             elif image_type == 'logo':
                 image_path = os.path.join(grid_folder, f'{appid}_logo{extension}')
-            else:
-                continue
+            elif image_type == 'home':
+                image_path = os.path.join(grid_folder, f'{appid}{extension}')
 
             logger.info(f"Saving {image_type} image for appid {appid} from {url} to {image_path}")
             if not os.path.exists(image_path):
@@ -164,9 +181,12 @@ def update_shortcuts(current_games):
             if game_name not in current_games:
                 appid = shortcut.get('appid', '')
                 # Remove images associated with the game
-                for image_type in ['p', '_hero', '_logo']:
+                for image_type in ['p', '_hero', '_logo','home']:
                     for ext in ['.jpg', '.png']:
-                        image_path = os.path.join(grid_folder, f'{appid}{image_type}{ext}')
+                        if(image_type == 'home'):
+                            image_path = os.path.join(grid_folder, f'{appid}{ext}')
+                        else:
+                            image_path = os.path.join(grid_folder, f'{appid}{image_type}{ext}')
                         if os.path.exists(image_path):
                             os.remove(image_path)
                             logger.info(f"Removed {image_type} image for game: {game_name}")
