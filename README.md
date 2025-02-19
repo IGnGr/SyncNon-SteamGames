@@ -22,6 +22,7 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - (NEW) Added exceptions to the names of executables to be found, to avoid using the wrong one in Unity games
 
 ## Limitations:
+- Since the user ID is assumed, if there are more than 1 steam accounts, it may not work (We always select the first one in alphabetical order) 
 - Only 1 folder of games can be used. Altough any number of subfolders is okay. 
 
     This means that, as long as all games are under a given folder (for example: <b>C:\NonSteamGames\Game1Folder, C:\NonSteamGames\Game2Folder, C:\NonSteamGames\Game3Folder</b> and so on) you are okay. You would select C:\NonSteamGames as your desired folder in this case.
