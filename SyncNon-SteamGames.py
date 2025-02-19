@@ -18,7 +18,7 @@ def readJsonFile(filename):
         
 def determineUserdataFolder():
     #Assuming only 1 steam usser, on \\userdata we only have the '0' folder and the one with the ID, so we can infer it
-    steam_user_data_ID = [x for x in os.listdir(os.path.join(steamdir_path,"userdata"))][1]
+    steam_user_data_ID = [x for x in os.listdir(os.path.join(steamdir_path,"userdata")) if x != "0"][0]
     return os.path.join(steamdir_path, "userdata", steam_user_data_ID, "config")
     
 
@@ -138,7 +138,7 @@ def find_largest_exe(game_dir):
     largest_file = None
     largest_size = 0
     #To avoid the uninstaller or some other exe to be used, mostly in Unity games
-    exceptions = ["unins","unity"]
+    exceptions = ["unins","unity","redist"]
 
     for root, dirs, files in os.walk(game_dir):
         for file in files:
