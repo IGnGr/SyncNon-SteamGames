@@ -1,7 +1,7 @@
 certifi==2025.11.12
 charset-normalizer==3.4.4
 colored==2.3.1
-Gooey==1.0.8.1
+Gooey @ git+https://github.com/IGnGr/Gooey.git@1.2.1-release
 idna==3.11
 pillow==12.0.0
 psutil==7.1.3
