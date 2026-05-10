@@ -222,7 +222,7 @@ def update_shortcuts(current_games):
         for game_name,  params_json in existing_games.items():
             shortcut_path_norm = normalize_path(params_json["StartDir"])
             if shortcut_path_norm not in current_games_norm and game_name != "":
-                appid =  params_json.get('appid', '')
+                appid = normalize_appid(params_json["appid"])
                 # Remove images associated with the game
                 for image_type in ['p', '_hero', '_logo','home']:
                     for ext in ['.jpg', '.png']:
@@ -236,7 +236,7 @@ def update_shortcuts(current_games):
 
                 # Remove the shortcut from shortcuts file
                 for idx, s in list(shortcuts['shortcuts'].items()):
-                    if s.get('appname', '').strip().lower() == game_name:
+                    if normalize_path(s.get('StartDir', '')) == shortcut_path_norm:
                         del shortcuts['shortcuts'][idx]
                         logger.info(f"Removed shortcut for game: {game_name}")
                 # Reindex shortcuts to sequential numeric keys
