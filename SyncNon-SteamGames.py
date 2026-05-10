@@ -13,10 +13,6 @@ import traceback
 # Optional: force UTF-8 mode globally
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
-# Rebind stdout/stderr to UTF-8
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
-
 def normalize_path(p: str) -> str:
     return os.path.normcase(os.path.normpath(p.strip('"')))
 
@@ -47,7 +43,12 @@ def determineUserdataFolder():
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-storedParametersJSONFilename = "parameters.json"
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+storedParametersJSONFilename = os.path.join(BASE_DIR, "parameters.json")
 
 storedParametersJSON = {}
 storedParametersJSON = readJsonFile(storedParametersJSONFilename)
@@ -324,33 +325,32 @@ def update_shortcuts(current_games):
 
 
 def GUI():
-
     parser = GooeyParser(description='Get your NonSteam Games added on Steam.')
 
     parser.add_argument(
-        'game_installation_path',
+        '--game_installation_path',
         widget='MultiDirChooser',
         metavar='NonSteam Games Folder',
         action='store',
-        default = game_installation_path if game_installation_path else ''
-        )
-    
+        default=game_installation_path if game_installation_path else ''
+    )
+
     parser.add_argument(
-        'steamgriddb_api_key',
+        '--steamgriddb_api_key',
         metavar='SteamgridDB API Key',
         help='You can get yours in the link below:\nhttps://www.steamgriddb.com/profile/preferences/api\nSubstitute the link with the key after you have generated it',
-        default = steamgriddb_api_key if steamgriddb_api_key else "https://www.steamgriddb.com/profile/preferences/api",
+        default=steamgriddb_api_key if steamgriddb_api_key else "https://www.steamgriddb.com/profile/preferences/api",
         action='store'
-        )
-    
+    )
+
     parser.add_argument(
-        'steamdir_path',
+        '--steamdir_path',
         metavar='Steam Installation Path',
         widget='DirChooser',
-        help = "By default C:\\Program Files (x86)\\Steam",
+        help="By default C:\\Program Files (x86)\\Steam",
         default=steamdir_path if steamdir_path else 'C:\\Program Files (x86)\\Steam',
         action='store'
-        )
+    )
 
     return parser.parse_args()
 
@@ -360,7 +360,7 @@ def storeVariablesFromGUI(args):
     game_installation_path = args.game_installation_path
     steamgriddb_api_key = args.steamgriddb_api_key
     steamdir_path = args.steamdir_path
-    
+
     storedParametersJSON = {}
     storedParametersJSON["game_installation_path"] = game_installation_path
     storedParametersJSON["steamgriddb_api_key"] = steamgriddb_api_key
@@ -368,16 +368,13 @@ def storeVariablesFromGUI(args):
 
     saveJsonFile(storedParametersJSONFilename, storedParametersJSON)
 
-def main():
+def main(args):
     """Main function to check for new or removed games and update Steam shortcuts accordingly."""
     try:
-        # Check if running with --ignore-gooey (use already-loaded stored config)
-        if '--ignore-gooey' not in sys.argv:
-            # Only run GUI if NOT using --ignore-gooey
-            argumentsGUI = GUI()
-            storeVariablesFromGUI(argumentsGUI)
-            
-        # Verify we have the required parameters
+        storeVariablesFromGUI(args)
+
+        logger.error(game_installation_path + ";" + steamgriddb_api_key + ";" + steamdir_path)
+
         if not game_installation_path or not steamgriddb_api_key or not steamdir_path:
             logger.error("Missing required parameters. Please run with GUI first to set them up.")
             return
@@ -385,9 +382,7 @@ def main():
         logger.info("Reading current games from installation directory...")
         current_games = read_current_games()
 
-        #Workaround since backslash are not allowed in f-strings
         nl = '\n'
-        #Parsed to have a game per line
         logger.info(f"Current games: {nl.join(str(current_games).split(','))}")
 
         determineUserdataFolder()
@@ -397,14 +392,22 @@ def main():
 
     except Exception as e:
         logger.error(f"Unexpected error in main function: {e}")
+        logger.error(traceback.format_exc())
 
-# Apply Gooey decorator conditionally
-if '--ignore-gooey' not in sys.argv:
-    main = Gooey(
-        show_preview_warning=False, 
-        progress_regex=r"Games processed: (?P<current>\d+)/(?P<total>\d+)$", 
-        progress_expr="current / total * 100"
-    )(main)
+
+def run():
+    if '--ignore-gooey' in sys.argv:
+        # strip it so argparse doesn't complain
+        sys.argv.remove('--ignore-gooey')
+        args = GUI()
+    else:
+        args = Gooey(
+            show_preview_warning=False,
+            progress_regex=r"Games processed: (?P<current>\d+)/(?P<total>\d+)$",
+            progress_expr="current / total * 100"
+        )(GUI)()
+
+    main(args)
 
 if __name__ == "__main__":
-    main()
+    run()
