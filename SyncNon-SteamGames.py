@@ -1,4 +1,6 @@
 import sys, io, os
+from typing import Tuple
+
 import vdf
 import requests
 import logging
@@ -6,6 +8,7 @@ import zlib
 import json
 from pathlib import Path
 from gooey import Gooey, GooeyParser
+import traceback
 
 # Optional: force UTF-8 mode globally
 os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -13,6 +16,17 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 # Rebind stdout/stderr to UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+
+def normalize_path(p: str) -> str:
+    return os.path.normcase(os.path.normpath(p.strip('"')))
+
+def normalize_appid(appid):
+    if isinstance(appid, str):
+        appid = int(appid)
+    return str(appid & 0xffffffff)
+
+def escape_path(path):
+    return path.replace("\\", "\\\\")
 
 def saveJsonFile(filename, data):
     with open(filename, 'w') as f:
@@ -64,8 +78,6 @@ def read_current_games():
         global totalGames
         totalGames = len(current_games)
         logger.info(f"Total number of games: {totalGames}")
-
-
 
     except Exception as e:
         logger.error(f"Error reading game installation directory {game_installation_path}: {e}")
@@ -164,7 +176,23 @@ def find_largest_exe(game_dir):
     
     return largest_file
 
+def retrieve_steam_grid_data(exe_name) -> Tuple[str,str]:
+    game_id = None
+    game_name = None
 
+    headers = {
+        'Authorization': f'Bearer {steamgriddb_api_key}'
+    }
+    search_url = f'https://www.steamgriddb.com/api/v2/search/autocomplete/{exe_name}'
+    response = requests.get(search_url, headers=headers)
+    logger.info(f"Searching SteamGridDB for {exe_name}, URL: {search_url}, Status Code: {response.status_code}")
+    if response.status_code == 200:
+        data = response.json()
+        if data['success'] and data['data']:
+            game_id = data['data'][0]['id']  # Assuming first result is the best match
+            game_name = data['data'][0]['name']
+
+    return game_id, game_name
 
 def update_shortcuts(current_games):
     """Update the Steam shortcuts with new and removed games, and fetch/update images."""
@@ -176,18 +204,25 @@ def update_shortcuts(current_games):
     # Ensure the grid folder exists
     Path(grid_folder).mkdir(parents=True, exist_ok=True)
 
-    shortcuts_file = os.path.join(steam_user_data_path, 'shortcuts.vdf')
+    shortcuts_file = Path(steam_user_data_path) / 'shortcuts.vdf'
 
     try:
-        shortcuts = {'shortcuts': {}}
+        shortcuts = {"shortcuts":{}}
+
+        if shortcuts_file.is_file():
+            with open(shortcuts_file, 'rb') as shortcuts_vdf:
+                shortcuts = vdf.binary_load(shortcuts_vdf)
 
         # Collect the current shortcuts
         existing_games = {os.path.basename(shortcut.get('StartDir', '').lower().strip('"')): shortcut for shortcut in shortcuts['shortcuts'].values()}
 
+        current_games_norm = {normalize_path(p) for p in current_games}
+
         # Remove shortcuts for games no longer in the installation directory
-        for game_name, shortcut in existing_games.items():
-            if game_name not in current_games:
-                appid = shortcut.get('appid', '')
+        for game_name,  params_json in existing_games.items():
+            shortcut_path_norm = normalize_path(params_json["StartDir"])
+            if shortcut_path_norm not in current_games_norm and game_name != "":
+                appid =  params_json.get('appid', '')
                 # Remove images associated with the game
                 for image_type in ['p', '_hero', '_logo','home']:
                     for ext in ['.jpg', '.png']:
@@ -204,75 +239,88 @@ def update_shortcuts(current_games):
                     if s.get('appname', '').strip().lower() == game_name:
                         del shortcuts['shortcuts'][idx]
                         logger.info(f"Removed shortcut for game: {game_name}")
+                # Reindex shortcuts to sequential numeric keys
+                shortcuts['shortcuts'] = {
+                    str(i): v for i, v in enumerate(shortcuts['shortcuts'].values())
+                }
+
 
         # Add or update games in shortcuts
         for game_path in current_games:
+            shortcut_already_present = False
+            appid = None
+            exe_path = None
             try:
                 game_name = os.path.basename(game_path)
-                
+
                 global currentGame
                 currentGame += 1
                 logger.info("")
                 logger.info(f"Current game: {game_name}")
                 logger.info(f"Games processed: {currentGame}/{totalGames}")
 
-                if game_name in existing_games:
-                    logger.info(f"{game_name} already in Steam")
+                for existing_game_name, params_json in existing_games.items():
+                    cur_game_path = params_json["StartDir"].strip('"')
+                    if normalize_path(game_path) == normalize_path(cur_game_path):
+                        shortcut_already_present = True
+                        logger.info(f"{game_name} already in Steam")
+                        #normalization necessary or the appid gets incorrectly treated as signed int
+                        appid = normalize_appid(params_json["appid"])
+                        break
+
+                if not shortcut_already_present:
+                    exe_file = find_largest_exe(game_path)
+                    if exe_file:
+                        logger.info(f"Largest .exe file found: {exe_file}")
+                    else:
+                        logger.error(f"No .exe files found for {game_name}. Skipping...")
+                        continue
+
+                    exe_path = os.path.join(game_path, exe_file)
+                    appid = normalize_appid(generate_appid(game_name, exe_path))
+
+                (game_id, steam_grid_game_name) = retrieve_steam_grid_data(game_name)
+
+                if steam_grid_game_name is None:
                     continue
 
-                exe_file = find_largest_exe(game_path)
-                if exe_file:
-                    logger.info(f"Largest .exe file found: {exe_file}")
-                else:
-                    logger.error(f"No .exe files found for {game_name}. Skipping...")
-                    continue
-                    
-                exe_path = os.path.join(game_path, exe_file)
-                
-                appid = generate_appid(game_name, exe_path)             
-                # Search for the game on SteamGridDB and fetch images
-                headers = {
-                    'Authorization': f'Bearer {steamgriddb_api_key}'
-                }
-                search_url = f'https://www.steamgriddb.com/api/v2/search/autocomplete/{game_name}'
-                response = requests.get(search_url, headers=headers)
-                logger.info(f"Searching SteamGridDB for {game_name}, URL: {search_url}, Status Code: {response.status_code}")
-                if response.status_code == 200:
-                    data = response.json()
-                    if data['success'] and data['data']:
-                        game_id = data['data'][0]['id']  # Assuming first result is the best match
-                        game_name = data['data'][0]['name']
-                        save_images(appid, game_id)
+                save_images(appid, game_id)
 
-                # Add shortcut entry
-                new_entry = {
-                    "appid": appid,
-                    "appname": game_name,
-                    "exe": f'"{exe_path}"',
-                    "StartDir": f'"{game_path}"',
-                    "LaunchOptions": "",
-                    "IsHidden": 0,
-                    "AllowDesktopConfig": 1,
-                    "OpenVR": 0,
-                    "Devkit": 0,
-                    "DevkitGameID": "",
-                    "LastPlayTime": 0,
-                    "tags": {}
-                }
-                shortcuts['shortcuts'][str(len(shortcuts['shortcuts']))] = new_entry
-                logger.info(f"Added shortcut for game: {game_name}")
-                
+                if not shortcut_already_present:
+
+                    # Add shortcut entry
+                    new_entry = {
+                        "appid": appid,
+                        "appname": steam_grid_game_name,
+                        "exe": f'"{exe_path}"',
+                        "StartDir": f'"{game_path}"',
+                        "LaunchOptions": "",
+                        "IsHidden": 0,
+                        "AllowDesktopConfig": 1,
+                        "OpenVR": 0,
+                        "Devkit": 0,
+                        "DevkitGameID": "",
+                        "LastPlayTime": 0,
+                        "tags": {
+                            "0" :"SyncNon-Steam"
+                        }
+                    }
+                    shortcuts['shortcuts'][str(len(shortcuts['shortcuts']))] = new_entry
+                    logger.info(f"Added shortcut for game: {game_name}")
+
             except Exception as e:
-                logger.error(f"Error processing game {game_name}: {e}. Continuing with next game...")
-                continue
+                logger.error("Error updating shortcuts:")
+                logger.error(traceback.format_exc())
 
         # Save the updated shortcuts file
         with open(shortcuts_file, 'wb') as f:
             vdf.binary_dump(shortcuts, f)
             logger.info("Shortcuts file updated and saved.")
 
+
     except Exception as e:
         logger.error(f"Error updating shortcuts: {e}")
+        logger.error(traceback.format_exc())
 
 
 def GUI():
