@@ -29,13 +29,26 @@ jobs:
     - name: Read Changelog
       id: changelog
       run: |
-        # Extract the section for the current version (assumes version is in the tag)
-        VERSION=${{ github.ref_name }}
-        # Use awk or similar to parse the changelog (adjust if needed)
-        BODY=$(awk "/## \[$VERSION\]/,/^## \[/ { if (!/^## \[/ || /^## \[$VERSION\]/) print; else exit }" CHANGELOG.md | sed '1d')  # Remove the header line
-        echo "content<<EOF" >> $GITHUB_OUTPUT
-        echo "$BODY" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        $VERSION = $env:GITHUB_REF_NAME
+        $content = Get-Content CHANGELOG.md
+        $start = $false
+        $bodyLines = @()
+        foreach ($line in $content) {
+            if ($line -match "## \[$VERSION\]") {
+                $start = $true
+                continue
+            }
+            if ($start -and $line -match "^## \[") {
+                break
+            }
+            if ($start) {
+                $bodyLines += $line
+            }
+        }
+        $BODY = $bodyLines -join "`n"
+        "content<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        $BODY | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
     - name: Create Release
       uses: actions/create-release@v1
