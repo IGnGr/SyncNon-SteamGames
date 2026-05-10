@@ -373,8 +373,6 @@ def main(args):
     try:
         storeVariablesFromGUI(args)
 
-        logger.error(game_installation_path + ";" + steamgriddb_api_key + ";" + steamdir_path)
-
         if not game_installation_path or not steamgriddb_api_key or not steamdir_path:
             logger.error("Missing required parameters. Please run with GUI first to set them up.")
             return
