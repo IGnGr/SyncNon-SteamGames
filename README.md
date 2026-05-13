@@ -55,6 +55,17 @@ sudo apt install libgtk-3-dev python-config
 - Make sure the directories and SteamGridDB API fields are filled in.
 - Run it
 
+## Release notes
+The GitHub release workflow is triggered by pushing a git tag in `vX.Y.Z` format, for example `v1.4.0`.
+
+Example:
+```bash
+git tag v1.4.0
+git push origin v1.4.0
+```
+
+Make sure `CHANGELOG.md` contains a matching heading like `## [v1.4.0]` before pushing the tag.
+
 
 ## Tips
 If your library is huge and you are having difficulties locating the games, here is how you can find them easily  until Valve provides a filter in desktop mode (Only big picture has a filter for non-steam games):

@@ -220,9 +220,11 @@ def update_shortcuts(current_games):
         current_games_norm = {normalize_path(p) for p in current_games}
 
         # Remove shortcuts for games no longer in the installation directory
-        for game_name,  params_json in existing_games.items():
+        for game_name, params_json in existing_games.items():
             shortcut_path_norm = normalize_path(params_json["StartDir"])
-            if shortcut_path_norm not in current_games_norm and game_name != "":
+            game_sync_tag =  params_json["tags"].get("0", "")
+            if shortcut_path_norm not in current_games_norm and game_name != "" and game_sync_tag == "SyncNon-Steam":
+                logger.info(f"Game {game_name} from path: {shortcut_path_norm} is on steam but not in the installation directory, removing it from shortcuts")
                 appid = normalize_appid(params_json["appid"])
                 # Remove images associated with the game
                 for image_type in ['p', '_hero', '_logo','home']:

@@ -12,6 +12,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Validate release tag
+      shell: pwsh
+      run: |
+        $VERSION = $env:GITHUB_REF_NAME
+        if ($VERSION -notmatch '^v\d+\.\d+\.\d+$') {
+          throw "Release tags must use vX.Y.Z format, for example v1.4.0. Received: $VERSION"
+        }
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -28,13 +36,15 @@ jobs:
 
     - name: Read Changelog
       id: changelog
+      shell: pwsh
       run: |
         $VERSION = $env:GITHUB_REF_NAME
+        $escapedVersion = [regex]::Escape($VERSION)
         $content = Get-Content CHANGELOG.md
         $start = $false
         $bodyLines = @()
         foreach ($line in $content) {
-            if ($line -match "## \[$VERSION\]") {
+            if ($line -match "^## \[$escapedVersion\]$") {
                 $start = $true
                 continue
             }
@@ -45,7 +55,13 @@ jobs:
                 $bodyLines += $line
             }
         }
+        if (-not $start) {
+            throw "No matching CHANGELOG.md section was found for $VERSION. Add a heading like '## [$VERSION]'."
+        }
         $BODY = $bodyLines -join "`n"
+        if ([string]::IsNullOrWhiteSpace($BODY)) {
+            throw "The CHANGELOG.md section for $VERSION is empty."
+        }
         "content<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
         $BODY | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
         "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
