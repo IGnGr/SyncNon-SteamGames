@@ -11,7 +11,7 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - Generates unique AppIDs for non-Steam games.
 - Fetches grid, hero, and logo images from SteamGridDB.
 - Adds new games to Steam shortcuts.
-- Removes shortcuts for games that are no longer installed.
+- Removes shortcuts for games that are no longer installed, but only if they were originally created by SyncNon-SteamGames.
 - Finds largest .exe in game folder and adds that as the game executable.
 - Logging
 - Changed the shown name in Steam of the games to be the name from steamgrid instead of the executable name
@@ -56,15 +56,15 @@ sudo apt install libgtk-3-dev python-config
 - Run it
 
 ## Release notes
-The GitHub release workflow is triggered by pushing a git tag in `vX.Y.Z` format, for example `v1.4.0`.
+The GitHub release workflow is triggered by pushing a git tag in `vX.Y.Z` format, for example `v1.4.1`.
 
 Example:
 ```bash
-git tag v1.4.0
-git push origin v1.4.0
+git tag v1.4.1
+git push origin v1.4.1
 ```
 
-Make sure `CHANGELOG.md` contains a matching heading like `## [v1.4.0]` before pushing the tag.
+Make sure `CHANGELOG.md` contains a matching heading like `## [v1.4.1]` before pushing the tag.
 
 
 ## Tips
