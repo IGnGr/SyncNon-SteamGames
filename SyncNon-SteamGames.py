@@ -1,10 +1,10 @@
-import sys, io, os
-from typing import Tuple
+import sys, os, re
+from typing import Tuple, Dict
 
 import vdf
 import requests
 import logging
-import zlib   
+import zlib
 import json
 from pathlib import Path
 from gooey import Gooey, GooeyParser
@@ -13,31 +13,47 @@ import traceback
 # Optional: force UTF-8 mode globally
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
+STEAM_ID64_BASE = 76561197960265728
+
 def normalize_path(p: str) -> str:
     return os.path.normcase(os.path.normpath(p.strip('"')))
+
 
 def normalize_appid(appid):
     if isinstance(appid, str):
         appid = int(appid)
     return str(appid & 0xffffffff)
 
+
 def escape_path(path):
     return path.replace("\\", "\\\\")
+
 
 def saveJsonFile(filename, data):
     with open(filename, 'w') as f:
         json.dump(data, f)
 
+
 def readJsonFile(filename):
-    if(os.path.isfile(filename)):
+    if (os.path.isfile(filename)):
         with open(filename, 'r') as f:
             return json.loads(f.read())
-        
-def determineUserdataFolder():
-    #Assuming only 1 steam usser, on \\userdata we only have the '0' folder and the one with the ID, so we can infer it
-    steam_user_data_ID = [x for x in os.listdir(os.path.join(steamdir_path,"userdata")) if x != "0"][0]
+
+
+def determineUserdataFolder(selected_steam_user_id=None):
+    steam_users = get_steam_users()
+    steam_user_data_ID = resolve_steam_user_id(selected_steam_user_id, steam_users)
+
+    if not steam_user_data_ID:
+        if len(steam_users) == 1:
+            steam_user_data_ID = next(iter(steam_users))
+        elif len(steam_users) > 1:
+            raise ValueError("Multiple Steam users found. Please select one with --steam_user_id.")
+        else:
+            raise ValueError(f"No Steam userdata folders found in {steamdir_path}")
+
     return os.path.join(steamdir_path, "userdata", steam_user_data_ID, "config")
-    
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -56,13 +72,17 @@ storedParametersJSON = readJsonFile(storedParametersJSONFilename)
 game_installation_path = ""
 steamgriddb_api_key = ""
 steamdir_path = ""
+steam_user_id = ""
 
 ##Taking them from the JSON if it exists
 if storedParametersJSON:
     game_installation_path = storedParametersJSON["game_installation_path"]
-    steamgriddb_api_key = storedParametersJSON["steamgriddb_api_key"] 
+    steamgriddb_api_key = storedParametersJSON["steamgriddb_api_key"]
     steamdir_path = storedParametersJSON["steamdir_path"]
-
+    if "steam_user_id" not in storedParametersJSON:
+        storedParametersJSON["steam_user_id"] = ""
+        saveJsonFile(storedParametersJSONFilename, storedParametersJSON)
+    steam_user_id = storedParametersJSON["steam_user_id"]
 
 totalGames = 0
 currentGame = 0
@@ -71,11 +91,11 @@ currentGame = 0
 def read_current_games():
     """Read the current games from the game installation directory."""
     try:
-        current_games = { os.path.join(base_path, subfolder)
-    for base_path in game_installation_path.split(";")
-    if os.path.isdir(base_path)
-    for subfolder in os.listdir(base_path)
-    if os.path.isdir(os.path.join(base_path, subfolder))}
+        current_games = {os.path.join(base_path, subfolder)
+                         for base_path in game_installation_path.split(";")
+                         if os.path.isdir(base_path)
+                         for subfolder in os.listdir(base_path)
+                         if os.path.isdir(os.path.join(base_path, subfolder))}
         global totalGames
         totalGames = len(current_games)
         logger.info(f"Total number of games: {totalGames}")
@@ -85,21 +105,25 @@ def read_current_games():
         return set()
     return current_games
 
+
 def generate_appid(game_name, exe_path):
     """Generate a unique appid for the game based on its exe path and name."""
     unique_name = (exe_path + game_name).encode('utf-8')
     legacy_id = zlib.crc32(unique_name) | 0x80000000
     return str(legacy_id)
 
-def getGridImageURLBySize(json,image_type):
-    imageSize = {'grid' : (600,900), 'home' : (920,430)}
 
-    ##Locating the image type by size, and taking the first result 
-    url = [x for x in json['data'] if x and x['width'] == imageSize[image_type][0] and x['height'] == imageSize[image_type][1]]
-    if(url):
+def getGridImageURLBySize(json, image_type):
+    imageSize = {'grid': (600, 900), 'home': (920, 430)}
+
+    ##Locating the image type by size, and taking the first result
+    url = [x for x in json['data'] if
+           x and x['width'] == imageSize[image_type][0] and x['height'] == imageSize[image_type][1]]
+    if (url):
         return url[0]['url']
     else:
         return None
+
 
 def fetch_steamgriddb_image(game_id, image_type):
     """Fetch a single image (first available) of specified type from SteamGridDB."""
@@ -110,10 +134,10 @@ def fetch_steamgriddb_image(game_id, image_type):
         base_url = f'https://www.steamgriddb.com/api/v2/heroes/game/{game_id}'
     elif image_type == "home":
         base_url = f'https://www.steamgriddb.com/api/v2/grids/game/{game_id}'
-    else: base_url = f'https://www.steamgriddb.com/api/v2/{image_type}s/game/{game_id}'
+    else:
+        base_url = f'https://www.steamgriddb.com/api/v2/{image_type}s/game/{game_id}'
     response = requests.get(base_url, headers=headers)
     logger.info(f"Fetching {image_type} for game ID: {game_id}, URL: {base_url}, Status Code: {response.status_code}")
-
 
     if response.status_code == 200:
         data = response.json()
@@ -121,9 +145,10 @@ def fetch_steamgriddb_image(game_id, image_type):
             if image_type == "home" or image_type == 'grid':
                 return getGridImageURLBySize(data, image_type)
             return data['data'][0]['url']  # Return the URL of the first image found
-        
+
     logger.error(f"Failed to fetch {image_type} for game ID: {game_id}")
     return None
+
 
 def download_image(url, local_path):
     """Download an image from URL and save it locally."""
@@ -137,6 +162,7 @@ def download_image(url, local_path):
     except Exception as e:
         logger.error(f"Failed to download image from {url}: {e}")
     return False
+
 
 def save_images(appid, game_id):
     """Save grid, hero, and logo images for the game."""
@@ -160,11 +186,12 @@ def save_images(appid, game_id):
                 if download_image(url, image_path):
                     logger.info(f"Downloaded {image_type} image for appid {appid} from {url}")
 
+
 def find_largest_exe(game_dir):
     largest_file = None
     largest_size = 0
-    #To avoid the uninstaller or some other exe to be used, mostly in Unity games
-    exceptions = ["unins","unity","redist"]
+    # To avoid the uninstaller or some other exe to be used, mostly in Unity games
+    exceptions = ["unins", "unity", "redist"]
 
     for root, dirs, files in os.walk(game_dir):
         for file in files:
@@ -174,10 +201,11 @@ def find_largest_exe(game_dir):
                 if file_size > largest_size:
                     largest_size = file_size
                     largest_file = file_path
-    
+
     return largest_file
 
-def retrieve_steam_grid_data(exe_name) -> Tuple[str,str]:
+
+def retrieve_steam_grid_data(exe_name) -> Tuple[str, str]:
     game_id = None
     game_name = None
 
@@ -195,10 +223,9 @@ def retrieve_steam_grid_data(exe_name) -> Tuple[str,str]:
 
     return game_id, game_name
 
-def update_shortcuts(current_games):
-    """Update the Steam shortcuts with new and removed games, and fetch/update images."""
 
-    steam_user_data_path = determineUserdataFolder()
+def update_shortcuts(current_games, steam_user_data_path):
+    """Update the Steam shortcuts with new and removed games, and fetch/update images."""
 
     global grid_folder
     grid_folder = os.path.join(steam_user_data_path, 'grid')  # Folder to store grid images
@@ -208,28 +235,30 @@ def update_shortcuts(current_games):
     shortcuts_file = Path(steam_user_data_path) / 'shortcuts.vdf'
 
     try:
-        shortcuts = {"shortcuts":{}}
+        shortcuts = {"shortcuts": {}}
 
         if shortcuts_file.is_file():
             with open(shortcuts_file, 'rb') as shortcuts_vdf:
                 shortcuts = vdf.binary_load(shortcuts_vdf)
 
         # Collect the current shortcuts
-        existing_games = {os.path.basename(shortcut.get('StartDir', '').lower().strip('"')): shortcut for shortcut in shortcuts['shortcuts'].values()}
+        existing_games = {os.path.basename(shortcut.get('StartDir', '').lower().strip('"')): shortcut for shortcut in
+                          shortcuts['shortcuts'].values()}
 
         current_games_norm = {normalize_path(p) for p in current_games}
 
         # Remove shortcuts for games no longer in the installation directory
         for game_name, params_json in existing_games.items():
             shortcut_path_norm = normalize_path(params_json["StartDir"])
-            game_sync_tag =  params_json["tags"].get("0", "")
+            game_sync_tag = params_json["tags"].get("0", "")
             if shortcut_path_norm not in current_games_norm and game_name != "" and game_sync_tag == "SyncNon-Steam":
-                logger.info(f"Game {game_name} from path: {shortcut_path_norm} is on steam but not in the installation directory, removing it from shortcuts")
+                logger.info(
+                    f"Game {game_name} from path: {shortcut_path_norm} is on steam but not in the installation directory, removing it from shortcuts")
                 appid = normalize_appid(params_json["appid"])
                 # Remove images associated with the game
-                for image_type in ['p', '_hero', '_logo','home']:
+                for image_type in ['p', '_hero', '_logo', 'home']:
                     for ext in ['.jpg', '.png']:
-                        if(image_type == 'home'):
+                        if (image_type == 'home'):
                             image_path = os.path.join(grid_folder, f'{appid}{ext}')
                         else:
                             image_path = os.path.join(grid_folder, f'{appid}{image_type}{ext}')
@@ -246,7 +275,6 @@ def update_shortcuts(current_games):
                 shortcuts['shortcuts'] = {
                     str(i): v for i, v in enumerate(shortcuts['shortcuts'].values())
                 }
-
 
         # Add or update games in shortcuts
         for game_path in current_games:
@@ -267,7 +295,7 @@ def update_shortcuts(current_games):
                     if normalize_path(game_path) == normalize_path(cur_game_path):
                         shortcut_already_present = True
                         logger.info(f"{game_name} already in Steam")
-                        #normalization necessary or the appid gets incorrectly treated as signed int
+                        # normalization necessary or the appid gets incorrectly treated as signed int
                         appid = normalize_appid(params_json["appid"])
                         break
 
@@ -290,7 +318,6 @@ def update_shortcuts(current_games):
                 save_images(appid, game_id)
 
                 if not shortcut_already_present:
-
                     # Add shortcut entry
                     new_entry = {
                         "appid": appid,
@@ -305,7 +332,7 @@ def update_shortcuts(current_games):
                         "DevkitGameID": "",
                         "LastPlayTime": 0,
                         "tags": {
-                            "0" :"SyncNon-Steam"
+                            "0": "SyncNon-Steam"
                         }
                     }
                     shortcuts['shortcuts'][str(len(shortcuts['shortcuts']))] = new_entry
@@ -326,8 +353,78 @@ def update_shortcuts(current_games):
         logger.error(traceback.format_exc())
 
 
+
+
+
+def userdata_id_to_steamid64(userdata_id: str | int) -> str:
+    return str(STEAM_ID64_BASE + int(userdata_id))
+
+
+def get_steam_persona_name(userdata_id: str) -> str | None:
+    steamid64 = userdata_id_to_steamid64(userdata_id)
+
+    login_users_path = Path(steamdir_path) / "config" / "loginusers.vdf"
+    if not login_users_path.is_file():
+        return None
+
+    data = vdf.load(open(login_users_path, encoding="utf-8"))
+    users = data.get("users", {})
+
+    user = users.get(steamid64, {})
+    return user.get("PersonaName") or user.get("AccountName")
+
+
+def format_steam_user_choice(userdata_id: str, persona_name: str | None) -> str:
+    if persona_name:
+        return f"{persona_name} ({userdata_id})"
+    return userdata_id
+
+
+def get_steam_users(selected_steamdir_path=None) -> dict[str, str]:
+    global steamdir_path
+    current_steamdir_path = selected_steamdir_path or steamdir_path
+    userdata_path = os.path.join(current_steamdir_path, "userdata")
+
+    if not current_steamdir_path or not os.path.isdir(userdata_path):
+        return {}
+
+    previous_steamdir_path = steamdir_path
+    steamdir_path = current_steamdir_path
+    try:
+        return {
+            steam_id: format_steam_user_choice(steam_id, get_steam_persona_name(steam_id))
+            for steam_id in os.listdir(userdata_path)
+            if steam_id != "0" and steam_id.isdigit()
+        }
+    finally:
+        steamdir_path = previous_steamdir_path
+
+
+def resolve_steam_user_id(selected_steam_user_id, steam_users=None) -> str | None:
+    if not selected_steam_user_id:
+        return None
+
+    steam_users = steam_users or get_steam_users()
+    if selected_steam_user_id in steam_users:
+        return selected_steam_user_id
+
+    matching_users = [
+        steam_id for steam_id, label in steam_users.items()
+        if label == selected_steam_user_id
+    ]
+    if len(matching_users) == 1:
+        return matching_users[0]
+
+    return None
+
+
 def GUI():
     parser = GooeyParser(description='Get your NonSteam Games added on Steam.')
+    steam_users = get_steam_users(steamdir_path)
+    steam_user_id_choices = list(steam_users.values())
+    default_steam_user_id = resolve_steam_user_id(steam_user_id, steam_users) or ""
+    if len(steam_user_id_choices) == 1 or default_steam_user_id == "":
+        default_steam_user_id = steam_user_id_choices[0]
 
     parser.add_argument(
         '--game_installation_path',
@@ -354,21 +451,36 @@ def GUI():
         action='store'
     )
 
+    parser.add_argument(
+        '--steam_user_id',
+        metavar='Steam User ID',
+        widget='Dropdown',
+        help="SteamID3 (folder name at %Steam%/userdata/)",
+        default=default_steam_user_id,
+        required=len(steam_user_id_choices) > 1,
+        choices=steam_user_id_choices,
+        action='store'
+    )
+
     return parser.parse_args()
 
+
 def storeVariablesFromGUI(args):
-    global game_installation_path, steamgriddb_api_key, steamdir_path
+    global game_installation_path, steamgriddb_api_key, steamdir_path, steam_user_id
 
     game_installation_path = args.game_installation_path
     steamgriddb_api_key = args.steamgriddb_api_key
     steamdir_path = args.steamdir_path
+    steam_user_id = args.steam_user_id
 
     storedParametersJSON = {}
     storedParametersJSON["game_installation_path"] = game_installation_path
     storedParametersJSON["steamgriddb_api_key"] = steamgriddb_api_key
     storedParametersJSON["steamdir_path"] = steamdir_path
+    storedParametersJSON["steam_user_id"] = steam_user_id
 
     saveJsonFile(storedParametersJSONFilename, storedParametersJSON)
+
 
 def main(args):
     """Main function to check for new or removed games and update Steam shortcuts accordingly."""
@@ -385,10 +497,10 @@ def main(args):
         nl = '\n'
         logger.info(f"Current games: {nl.join(str(current_games).split(','))}")
 
-        determineUserdataFolder()
+        steam_user_data_path = determineUserdataFolder(args.steam_user_id)
 
         logger.info("Updating shortcuts and fetching images...")
-        update_shortcuts(current_games)
+        update_shortcuts(current_games, steam_user_data_path)
 
     except Exception as e:
         logger.error(f"Unexpected error in main function: {e}")
@@ -400,6 +512,7 @@ def run():
         # strip it so argparse doesn't complain
         sys.argv.remove('--ignore-gooey')
         args = GUI()
+
     else:
         args = Gooey(
             show_preview_warning=False,
@@ -408,6 +521,7 @@ def run():
         )(GUI)()
 
     main(args)
+
 
 if __name__ == "__main__":
     run()
