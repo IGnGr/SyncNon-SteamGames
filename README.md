@@ -24,12 +24,10 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - CLI support with the argument `--ignore-gooey` thanks to [`@pwilinchery`](https://github.com/IGnGr/SyncNon-SteamGames/pull/2)
 
 ## Limitations:
-- Only tested in Windows
 - The executable is located by size, which is not ideal. At this moment, the user must change the executable in Steam directly if the wrong one has been chosen.
 
 
 ## Requirements
-- Windows
 - NonSteam Games Folder: Path to the directory where your Non-Steam games are installed.
 - SteamGridDB API Key: You have to generate one for yourself here: https://www.steamgriddb.com/profile/preferences/api
 - Steam Installation path: Path where Steam is installed in your system.
@@ -59,18 +57,6 @@ For CLI usage, pass `--steam_user_id` when multiple Steam userdata folders exist
 python SyncNon-SteamGames.py --ignore-gooey --steam_user_id 12345678
 ```
 
-## Release notes
-The GitHub release workflow is triggered by pushing a git tag in `vX.Y.Z` format, for example `v1.4.1`.
-
-Example:
-```bash
-git tag v1.4.1
-git push origin v1.4.1
-```
-
-Make sure `CHANGELOG.md` contains a matching heading like `## [v1.4.1]` before pushing the tag.
-
-
 ## Tips
 If your library is huge and you are having difficulties locating the games, here is how you can find them easily  until Valve provides a filter in desktop mode (Only big picture has a filter for non-steam games):
 - Enable the option to show only installed games
@@ -82,6 +68,18 @@ If your library is huge and you are having difficulties locating the games, here
     This should narrow the games in your "Uncategorized" section to be basically the ones we're looking for
 - Create a new library on "Non-Steam" steam and add them
 - Congratulations! your games are categorized and easily accessible
+
+## Release notes
+The GitHub release workflow is triggered by pushing a git tag in `vX.Y.Z` format, for example `v1.4.1`.
+
+Example:
+```bash
+git tag v1.4.1
+git push origin v1.4.1
+```
+
+Make sure `CHANGELOG.md` contains a matching heading like `## [v1.4.1]` before pushing the tag.
+
 
 ## 3rd Party libraries
 - "Gooey" for the GUI (https://github.com/chriskiehl/Gooey)
