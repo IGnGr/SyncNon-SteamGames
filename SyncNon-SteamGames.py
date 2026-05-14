@@ -455,7 +455,7 @@ def GUI():
         '--steam_user_id',
         metavar='Steam User ID',
         widget='Dropdown',
-        help="SteamID3 (folder name at %Steam%/userdata/)",
+        help="Steam userdata folder ID, found under the Steam userdata folder.",
         default=default_steam_user_id,
         required=len(steam_user_id_choices) > 1,
         choices=steam_user_id_choices,

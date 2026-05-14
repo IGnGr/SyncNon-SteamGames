@@ -16,7 +16,7 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - Logging
 - Changed the shown name in Steam of the games to be the name from steamgrid instead of the executable name
 - Added GUI
-- Inference of the steam_user_data_path so only 3 parameters are needed to be provide by the user
+- Automatically uses the only available Steam userdata folder, or lets you select the Steam user ID when multiple accounts are detected.
 - Storage of the variables in a json file at the script location
 - Changed slightly the messages to be logged, now it informs if a titles is being skipped when it's already present in steam.
 - Added exceptions to the names of executables to be found, to avoid using the wrong one in Unity games
@@ -24,8 +24,6 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - CLI support with the argument `--ignore-gooey` thanks to [`@pwilinchery`](https://github.com/IGnGr/SyncNon-SteamGames/pull/2)
 
 ## Limitations:
-- Since the user ID is assumed, if there are more than 1 steam accounts, it may not work (We always select the first one in alphabetical order) 
-
 - Only tested in Windows
 - The executable is located by size, which is not ideal. At this moment, the user must change the executable in Steam directly if the wrong one has been chosen.
 
@@ -53,7 +51,13 @@ sudo apt install libgtk-3-dev python-config
 ## Usage
 - Download the packaged version from "Releases"
 - Make sure the directories and SteamGridDB API fields are filled in.
+- If multiple Steam accounts are found in the Steam `userdata` folder, select the Steam user ID to update.
 - Run it
+
+For CLI usage, pass `--steam_user_id` when multiple Steam userdata folders exist:
+```bash
+python SyncNon-SteamGames.py --ignore-gooey --steam_user_id 12345678
+```
 
 ## Release notes
 The GitHub release workflow is triggered by pushing a git tag in `vX.Y.Z` format, for example `v1.4.1`.
