@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.5.1]
+
+### Added
+- Added the `--cli` flag for manual CLI runs, keeping Gooey's internal `--ignore-gooey` flag separate.
+
+### Fixed
+- Steam has changed the steam id used in the loginusers.vdf file to steamid64 format, so the logic for finding the correct user data folder has been updated to reflect this change.
+
 ## [v1.5.0]
 
 ### Added
