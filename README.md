@@ -21,7 +21,7 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - Changed slightly the messages to be logged, now it informs if a titles is being skipped when it's already present in steam.
 - Added exceptions to the names of executables to be found, to avoid using the wrong one in Unity games
 - Multi folder support
-- CLI support with the argument `--ignore-gooey` thanks to [`@pwilinchery`](https://github.com/IGnGr/SyncNon-SteamGames/pull/2)
+- CLI support with the argument `--cli` thanks to [`@pwilinchery`](https://github.com/IGnGr/SyncNon-SteamGames/pull/2)
 
 ## Limitations:
 - The executable is located by size, which is not ideal. At this moment, the user must change the executable in Steam directly if the wrong one has been chosen.
@@ -54,7 +54,7 @@ sudo apt install libgtk-3-dev python-config
 
 For CLI usage, pass `--steam_user_id` when multiple Steam userdata folders exist:
 ```bash
-python SyncNon-SteamGames.py --ignore-gooey --steam_user_id 12345678
+python SyncNon-SteamGames.py --cli --steam_user_id 12345678
 ```
 
 ## Tips

@@ -14,6 +14,7 @@ import traceback
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
 STEAM_ID64_BASE = 76561197960265728
+DEFAULT_STEAMDIR_PATH = r"C:\Program Files (x86)\Steam"
 
 def normalize_path(p: str) -> str:
     return os.path.normcase(os.path.normpath(p.strip('"')))
@@ -352,16 +353,13 @@ def update_shortcuts(current_games, steam_user_data_path):
         logger.error(f"Error updating shortcuts: {e}")
         logger.error(traceback.format_exc())
 
-
-
-
+def steamid64_id_to_userdata_id(steamid64: str | int) -> str:
+    return str(int(steamid64) - STEAM_ID64_BASE)
 
 def userdata_id_to_steamid64(userdata_id: str | int) -> str:
     return str(STEAM_ID64_BASE + int(userdata_id))
 
-
 def get_steam_persona_name(userdata_id: str) -> str | None:
-    steamid64 = userdata_id_to_steamid64(userdata_id)
 
     login_users_path = Path(steamdir_path) / "config" / "loginusers.vdf"
     if not login_users_path.is_file():
@@ -370,13 +368,13 @@ def get_steam_persona_name(userdata_id: str) -> str | None:
     data = vdf.load(open(login_users_path, encoding="utf-8"))
     users = data.get("users", {})
 
-    user = users.get(steamid64, {})
+    user = users.get(userdata_id, {})
     return user.get("PersonaName") or user.get("AccountName")
 
 
 def format_steam_user_choice(userdata_id: str, persona_name: str | None) -> str:
     if persona_name:
-        return f"{persona_name} ({userdata_id})"
+        return f"{persona_name} ({steamid64_id_to_userdata_id(userdata_id)})"
     return userdata_id
 
 
@@ -390,9 +388,10 @@ def get_steam_users(selected_steamdir_path=None) -> dict[str, str]:
 
     previous_steamdir_path = steamdir_path
     steamdir_path = current_steamdir_path
+
     try:
         return {
-            steam_id: format_steam_user_choice(steam_id, get_steam_persona_name(steam_id))
+            steam_id: format_steam_user_choice(userdata_id_to_steamid64(steam_id), get_steam_persona_name(userdata_id_to_steamid64(steam_id)))
             for steam_id in os.listdir(userdata_path)
             if steam_id != "0" and steam_id.isdigit()
         }
@@ -420,11 +419,16 @@ def resolve_steam_user_id(selected_steam_user_id, steam_users=None) -> str | Non
 
 def GUI():
     parser = GooeyParser(description='Get your NonSteam Games added on Steam.')
-    steam_users = get_steam_users(steamdir_path)
+    selected_steamdir_path = steamdir_path or DEFAULT_STEAMDIR_PATH
+    steam_users = get_steam_users(selected_steamdir_path)
     steam_user_id_choices = list(steam_users.values())
-    default_steam_user_id = resolve_steam_user_id(steam_user_id, steam_users) or ""
-    if len(steam_user_id_choices) == 1 or default_steam_user_id == "":
+    default_steam_user_id = ""
+    resolved_steam_user_id = resolve_steam_user_id(steam_user_id, steam_users)
+    if resolved_steam_user_id:
+        default_steam_user_id = steam_users[resolved_steam_user_id]
+    elif len(steam_user_id_choices) == 1:
         default_steam_user_id = steam_user_id_choices[0]
+
 
     parser.add_argument(
         '--game_installation_path',
@@ -447,7 +451,7 @@ def GUI():
         metavar='Steam Installation Path',
         widget='DirChooser',
         help="By default C:\\Program Files (x86)\\Steam",
-        default=steamdir_path if steamdir_path else 'C:\\Program Files (x86)\\Steam',
+        default=selected_steamdir_path,
         action='store'
     )
 
@@ -471,7 +475,7 @@ def storeVariablesFromGUI(args):
     game_installation_path = args.game_installation_path
     steamgriddb_api_key = args.steamgriddb_api_key
     steamdir_path = args.steamdir_path
-    steam_user_id = args.steam_user_id
+    steam_user_id = resolve_steam_user_id(args.steam_user_id) or args.steam_user_id
 
     storedParametersJSON = {}
     storedParametersJSON["game_installation_path"] = game_installation_path
@@ -488,8 +492,12 @@ def main(args):
         storeVariablesFromGUI(args)
 
         if not game_installation_path or not steamgriddb_api_key or not steamdir_path:
-            logger.error("Missing required parameters. Please run with GUI first to set them up.")
-            return
+            logger.error("Some required parameters are missing.")
+            return 1
+
+        if steamgriddb_api_key == "https://www.steamgriddb.com/profile/preferences/api":
+            logger.error("SteamGridDB API key is missing.")
+            return 1
 
         logger.info("Reading current games from installation directory...")
         current_games = read_current_games()
@@ -501,15 +509,26 @@ def main(args):
 
         logger.info("Updating shortcuts and fetching images...")
         update_shortcuts(current_games, steam_user_data_path)
+        return 0
 
     except Exception as e:
         logger.error(f"Unexpected error in main function: {e}")
         logger.error(traceback.format_exc())
+        return 1
 
 
 def run():
-    if '--ignore-gooey' in sys.argv:
+    if '--cli' in sys.argv:
+        if not game_installation_path or not steamgriddb_api_key or not steamdir_path:
+            logger.error("Missing required parameters. Please run with GUI first to set them up.")
+            return 1
+
         # strip it so argparse doesn't complain
+        sys.argv.remove('--cli')
+        args = GUI()
+
+    elif '--ignore-gooey' in sys.argv:
+        # Gooey uses this when launching the script from the GUI.
         sys.argv.remove('--ignore-gooey')
         args = GUI()
 
@@ -520,8 +539,8 @@ def run():
             progress_expr="current / total * 100"
         )(GUI)()
 
-    main(args)
+    return main(args)
 
 
 if __name__ == "__main__":
-    run()
+    sys.exit(run())
