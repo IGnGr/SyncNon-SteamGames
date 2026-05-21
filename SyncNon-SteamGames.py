@@ -6,6 +6,7 @@ import requests
 import logging
 import zlib
 import json
+import shutil
 from pathlib import Path
 from gooey import Gooey, GooeyParser
 import traceback
@@ -20,6 +21,10 @@ def normalize_path(p: str) -> str:
     return os.path.normcase(os.path.normpath(p.strip('"')))
 
 
+def is_default_steamdir_path(path: str) -> bool:
+    return normalize_path(path) == normalize_path(DEFAULT_STEAMDIR_PATH)
+
+
 def normalize_appid(appid):
     if isinstance(appid, str):
         appid = int(appid)
@@ -31,6 +36,7 @@ def escape_path(path):
 
 
 def saveJsonFile(filename, data):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, 'w') as f:
         json.dump(data, f)
 
@@ -65,7 +71,23 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-storedParametersJSONFilename = os.path.join(BASE_DIR, "parameters.json")
+APP_CONFIG_DIR = os.path.join(os.environ.get("APPDATA", BASE_DIR), "SyncNonSteamGames")
+CONFIG_JSON_FILENAME = "parameters.json"
+
+
+def get_stored_parameters_json_filename():
+    os.makedirs(APP_CONFIG_DIR, exist_ok=True)
+    app_config_path = os.path.join(APP_CONFIG_DIR, CONFIG_JSON_FILENAME)
+    legacy_config_path = os.path.join(BASE_DIR, CONFIG_JSON_FILENAME)
+    if os.path.isfile(legacy_config_path):
+        shutil.copy2(legacy_config_path, app_config_path)
+        os.remove(legacy_config_path)
+
+    return app_config_path
+
+
+storedParametersJSONFilename = get_stored_parameters_json_filename()
+logger.info(f"Using parameters file: {storedParametersJSONFilename}")
 
 storedParametersJSON = {}
 storedParametersJSON = readJsonFile(storedParametersJSONFilename)
@@ -426,8 +448,10 @@ def GUI():
     resolved_steam_user_id = resolve_steam_user_id(steam_user_id, steam_users)
     if resolved_steam_user_id:
         default_steam_user_id = steam_users[resolved_steam_user_id]
-    elif len(steam_user_id_choices) == 1:
+    elif steam_user_id_choices:
         default_steam_user_id = steam_user_id_choices[0]
+    else:
+        steam_user_id_choices = [default_steam_user_id]
 
 
     parser.add_argument(
@@ -497,6 +521,10 @@ def main(args):
 
         if steamgriddb_api_key == "https://www.steamgriddb.com/profile/preferences/api":
             logger.error("SteamGridDB API key is missing.")
+            return 1
+
+        if not steam_user_id and not is_default_steamdir_path(steamdir_path):
+            logger.error("Custom Steam path was saved. Please restart the application to load the Steam users dropdown.")
             return 1
 
         logger.info("Reading current games from installation directory...")

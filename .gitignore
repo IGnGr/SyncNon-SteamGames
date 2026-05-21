@@ -3,3 +3,4 @@ dist/
 *.json
 .idea/
 .env/
+__pycache__/

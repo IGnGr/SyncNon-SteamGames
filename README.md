@@ -17,7 +17,7 @@ Automatically add Non-Steam Games to Steam with images from SteamGridDB
 - Changed the shown name in Steam of the games to be the name from steamgrid instead of the executable name
 - Added GUI
 - Automatically uses the only available Steam userdata folder, or lets you select the Steam user ID when multiple accounts are detected.
-- Storage of the variables in a json file at the script location
+- Storage of the variables in `%APPDATA%\SyncNonSteamGames\parameters.json`
 - Changed slightly the messages to be logged, now it informs if a titles is being skipped when it's already present in steam.
 - Added exceptions to the names of executables to be found, to avoid using the wrong one in Unity games
 - Multi folder support
