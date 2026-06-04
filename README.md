@@ -60,10 +60,11 @@ python SyncNon-SteamGames.py --cli --steam_user_id 12345678
 ## Tips
 If your library is huge and you are having difficulties locating the games, here is how you can find them easily  until Valve provides a filter in desktop mode (Only big picture has a filter for non-steam games):
 - Enable the option to show only installed games
-- Create 3 dynamics library: 
+- Create 4 dynamics library: 
     - Single Player
     - Multi Player
     - Co op
+    - Steam Trading Cards
 
     This should narrow the games in your "Uncategorized" section to be basically the ones we're looking for
 - Create a new library on "Non-Steam" steam and add them
