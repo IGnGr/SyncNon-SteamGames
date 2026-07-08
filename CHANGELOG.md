@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Changed the naming to snake_case `sync_non_steam_games.py` while keeping `SyncNon-SteamGames.py` as a compatibility launcher.
-- Added Python console usage documentation for calling helper functions directly.
 
 ### Changed
 - Added a SteamGridDB search fallback that retries with a split CamelCase name when the original executable name has no results, addressing [#10](https://github.com/IGnGr/SyncNon-SteamGames/issues/10).
