@@ -52,6 +52,50 @@ class SafeLogFormatter(logging.Formatter):
         message = super().format(record)
         return message.encode("ascii", errors="backslashreplace").decode("ascii")
 
+
+def decode_process_output(line: bytes, encoding: str) -> str:
+    try:
+        return line.decode(encoding)
+    except UnicodeDecodeError:
+        return line.decode("cp1252", errors="backslashreplace")
+
+
+def patch_gooey_output_decoding():
+    try:
+        from gooey.gui import processor
+    except ImportError:
+        return
+
+    if getattr(processor.ProcessController, "_syncnsg_decode_patch", False):
+        return
+
+    def _forward_stdout(self, process):
+        while True:
+            line = process.stdout.readline()
+            if not line:
+                break
+            progress = self._extract_progress(line)
+
+            processor.pub.send_message(processor.events.PROGRESS_UPDATE, progress=progress)
+            if progress is None or self.hide_progress_msg is False:
+                processor.pub.send_message(
+                    processor.events.CONSOLE_UPDATE,
+                    msg=decode_process_output(line, self.encoding),
+                )
+        processor.pub.send_message(processor.events.EXECUTION_COMPLETE)
+
+    def _extract_progress(self, text):
+        decoded_text = decode_process_output(text.strip(), self.encoding)
+        if self.progress_regex:
+            match = re.search(self.progress_regex, decoded_text)
+            if match:
+                self.result = self._calculate_progress(match)
+        return self.result
+
+    processor.ProcessController._forward_stdout = _forward_stdout
+    processor.ProcessController._extract_progress = _extract_progress
+    processor.ProcessController._syncnsg_decode_patch = True
+
 STEAM_ID64_BASE = 76561197960265728
 DEFAULT_STEAMDIR_PATH = r"C:\Program Files (x86)\Steam"
 
@@ -625,6 +669,7 @@ def run():
         args = GUI(allow_raw_steam_user_id=True)
 
     else:
+        patch_gooey_output_decoding()
         args = Gooey(
             show_preview_warning=False,
             encoding="utf-8",

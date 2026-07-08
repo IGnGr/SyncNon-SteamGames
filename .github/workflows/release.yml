@@ -5,12 +5,15 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Validate release tag
       shell: pwsh
@@ -21,7 +24,7 @@ jobs:
         }
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: '3.x'
 
@@ -62,29 +65,17 @@ jobs:
         if ([string]::IsNullOrWhiteSpace($BODY)) {
             throw "The CHANGELOG.md section for $VERSION is empty."
         }
-        "content<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-        $BODY | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-        "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        $BODY | Out-File -FilePath release_notes.md -Encoding utf8
 
     - name: Create Release
-      uses: actions/create-release@v1
-      id: create_release
+      uses: softprops/action-gh-release@v3
       with:
         draft: false
         prerelease: false
-        release_name: Release ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         tag_name: ${{ github.ref_name }}
-        body: |
-          ${{ steps.changelog.outputs.content }}
+        body_path: release_notes.md
+        files: ./dist/SyncNon-SteamGames.exe
+        fail_on_unmatched_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/SyncNon-SteamGames.exe
-        asset_name: SyncNon-SteamGames.exe
-        asset_content_type: application/octet-stream
