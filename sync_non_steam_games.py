@@ -15,16 +15,36 @@ import traceback
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 
+class SafeTextStream:
+    def __init__(self, stream):
+        self.stream = stream
+
+    def write(self, text):
+        if isinstance(text, str):
+            text = text.encode("ascii", errors="backslashreplace").decode("ascii")
+        return self.stream.write(text)
+
+    def flush(self):
+        return self.stream.flush()
+
+    def isatty(self):
+        return self.stream.isatty()
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
 def configure_text_stream(stream):
     if hasattr(stream, "reconfigure"):
         try:
             stream.reconfigure(encoding="utf-8", errors="backslashreplace")
         except (OSError, ValueError):
             pass
+    return SafeTextStream(stream)
 
 
-configure_text_stream(sys.stdout)
-configure_text_stream(sys.stderr)
+sys.stdout = configure_text_stream(sys.stdout)
+sys.stderr = configure_text_stream(sys.stderr)
 
 
 class SafeLogFormatter(logging.Formatter):
@@ -607,6 +627,7 @@ def run():
     else:
         args = Gooey(
             show_preview_warning=False,
+            encoding="utf-8",
             progress_regex=r"Games processed: (?P<current>\d+)/(?P<total>\d+)$",
             progress_expr="current / total * 100"
         )(GUI)()
