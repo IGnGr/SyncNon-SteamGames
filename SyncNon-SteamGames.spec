@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['SyncNon-SteamGames.py'],
+    ['sync_non_steam_games.py'],
     pathex=[],
     binaries=[],
     datas=[],

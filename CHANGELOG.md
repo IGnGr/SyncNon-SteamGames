@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v1.6.0]
+
+### Added
+- Changed the naming to snake_case `sync_non_steam_games.py` while keeping `SyncNon-SteamGames.py` as a compatibility launcher.
+- Added Python console usage documentation for calling helper functions directly.
+
+### Changed
+- Added a SteamGridDB search fallback that retries with a split CamelCase name when the original executable name has no results, addressing [#10](https://github.com/IGnGr/SyncNon-SteamGames/issues/10).
+- URL-encode SteamGridDB autocomplete search terms before sending requests.
+- Split trailing sequel numbers from executable names when converting CamelCase names, e.g. `TheEscapists2` to `The Escapists 2`.
+
 ## [v1.5.2]
 
 ### Changed

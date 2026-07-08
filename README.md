@@ -43,8 +43,7 @@ If installation of Gooey fails on Linux, please run following command to install
 sudo apt install libgtk-3-dev python-config
 ```
 
-- Execute the script "SyncNon-SteamGames.py"
-
+- Execute the script `sync_non_steam_games.py`
 
 ## Usage
 - Download the packaged version from "Releases"
@@ -54,7 +53,7 @@ sudo apt install libgtk-3-dev python-config
 
 For CLI usage, pass `--steam_user_id` when multiple Steam userdata folders exist:
 ```bash
-python SyncNon-SteamGames.py --cli --steam_user_id 12345678
+python sync_non_steam_games.py --cli --steam_user_id 12345678
 ```
 
 ## Tips
