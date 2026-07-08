@@ -12,8 +12,25 @@ from urllib.parse import quote
 from gooey import Gooey, GooeyParser
 import traceback
 
-# Optional: force UTF-8 mode globally
-os.environ["PYTHONIOENCODING"] = "utf-8"
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+
+def configure_text_stream(stream):
+    if hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except (OSError, ValueError):
+            pass
+
+
+configure_text_stream(sys.stdout)
+configure_text_stream(sys.stderr)
+
+
+class SafeLogFormatter(logging.Formatter):
+    def format(self, record):
+        message = super().format(record)
+        return message.encode("ascii", errors="backslashreplace").decode("ascii")
 
 STEAM_ID64_BASE = 76561197960265728
 DEFAULT_STEAMDIR_PATH = r"C:\Program Files (x86)\Steam"
@@ -64,7 +81,9 @@ def determineUserdataFolder(selected_steam_user_id=None):
 
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log_handler = logging.StreamHandler(sys.stdout)
+log_handler.setFormatter(SafeLogFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.basicConfig(level=logging.INFO, handlers=[log_handler], force=True)
 logger = logging.getLogger(__name__)
 
 if getattr(sys, 'frozen', False):
