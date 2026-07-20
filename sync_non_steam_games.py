@@ -433,17 +433,16 @@ def update_shortcuts(current_games, steam_user_data_path):
                     exe_path = os.path.join(game_path, exe_file)
                     appid = normalize_appid(generate_appid(game_name, exe_path))
 
-                (game_id, steam_grid_game_name) = retrieve_steam_grid_data(game_name)
+                    (game_id, steam_grid_game_name) = retrieve_steam_grid_data(game_name)
 
-                if steam_grid_game_name is None:
-                    (game_id, steam_grid_game_name) = retrieve_steam_grid_data(camel_case_to_split_name(game_name))
+                    if steam_grid_game_name is None:
+                        (game_id, steam_grid_game_name) = retrieve_steam_grid_data(camel_case_to_split_name(game_name))
 
-                if steam_grid_game_name is None:
-                    continue
+                    if steam_grid_game_name is None:
+                        continue
 
-                save_images(appid, game_id)
+                    save_images(appid, game_id)
 
-                if not shortcut_already_present:
                     # Add shortcut entry
                     new_entry = {
                         "appid": appid,
